@@ -63,9 +63,9 @@ def load_network_from_csv(file_path):
         return None
     
     return network
-
+    
 if __name__ == "__main__":
-    network = load_network_from_csv("profiles/network.csv")
+    network = load_network_from_csv("profiles/network2.csv")
     if network:
         # 显示网络基本信息
         print(f"节点数: {network.get_node_count()}")
@@ -75,7 +75,7 @@ if __name__ == "__main__":
         print(f"网络直径:{network.get_diameter()}")
         print(f"网络密度:{network.get_density()}")
 
-        network.plot_degree_distribution(fit_power_law=True)
+        network.visualize_communities()
         
         
-        network.save_network('profiles/net.gml')
+        network.save_network('profiles/net2.gml')

@@ -1,6 +1,7 @@
 import networkx as nx
 import matplotlib.pyplot as plt
 import numpy as np
+import community as community_louvain
 from collections import Counter
 
 class ComplexNetwork:
@@ -279,6 +280,157 @@ class ComplexNetwork:
         else:
             nx.write_edgelist(self.G, filename)
     
+    def community_detection(self, method="louvain", resolution=1.0, threshold=0.05):
+        """
+        使用社区检测算法对网络进行分割
+        
+        参数:
+            method (str): 社区检测方法，支持 'louvain'、'label_propagation'、'greedy_modularity'
+            resolution (float): Louvain算法的分辨率参数，大于1有利于形成小社区，小于1有利于形成大社区
+            threshold (float): 忽略小于此比例的小社区（0.05表示忽略小于总节点数5%的社区）
+        
+        返回:
+            list: 每个元素是一个社区，包含该社区的所有节点ID
+            float: 社区划分的模块度
+        """
+        # 确保使用无向图进行社区检测
+        if self.network_type == "directed":
+            G_undirected = self.G.to_undirected()
+        else:
+            G_undirected = self.G
+        
+        # 根据选择的方法执行社区检测
+        if method == "louvain":
+            # Louvain算法（高效且广泛使用）
+            partition = community_louvain.best_partition(G_undirected, resolution=resolution)
+            communities = {}
+            for node, comm_id in partition.items():
+                if comm_id not in communities:
+                    communities[comm_id] = []
+                communities[comm_id].append(node)
+            communities = list(communities.values())
+        
+        elif method == "label_propagation":
+            # 标签传播算法（适合大规模网络）
+            partition = nx.algorithms.community.label_propagation_communities(G_undirected)
+            communities = [list(comm) for comm in partition]
+        
+        elif method == "greedy_modularity":
+            # 贪婪模块度最大化算法
+            partition = nx.algorithms.community.greedy_modularity_communities(G_undirected)
+            communities = [list(comm) for comm in partition]
+        
+        else:
+            raise ValueError(f"不支持的社区检测方法: {method}")
+        
+        # 计算模块度
+        if method == "louvain":
+            modularity = community_louvain.modularity(partition, G_undirected)
+        else:
+            # 将社区转换为Louvain格式以计算模块度
+            part_dict = {}
+            for i, comm in enumerate(communities):
+                for node in comm:
+                    part_dict[node] = i
+            modularity = community_louvain.modularity(part_dict, G_undirected)
+        
+        # 过滤小社区
+        min_size = int(len(self.G) * threshold)
+        filtered_communities = [comm for comm in communities if len(comm) >= min_size]
+        
+        print(f"检测到 {len(communities)} 个社区，过滤后剩余 {len(filtered_communities)} 个社区")
+        print(f"模块度: {modularity:.4f}")
+        
+        return filtered_communities, modularity
+    
+    def visualize_communities(self, communities=None, method="louvain", layout="spring", 
+                             title="Community Structure", node_size=300, cmap=plt.cm.rainbow):
+        """
+        可视化社区结构
+        
+        参数:
+            communities (list, optional): 预计算的社区列表，如果为None则调用community_detection
+            method (str): 社区检测方法，当communities为None时使用
+            layout (str): 布局算法
+            title (str): 图表标题
+            node_size (int): 节点大小
+            cmap (matplotlib colormap): 颜色映射
+        """
+        # 如果没有提供社区，则计算社区
+        if communities is None:
+            communities, _ = self.community_detection(method=method)
+        
+        # 创建节点到社区的映射
+        node_to_community = {}
+        for i, comm in enumerate(communities):
+            for node in comm:
+                node_to_community[node] = i
+        
+        # 设置节点颜色
+        node_colors = [node_to_community.get(node, -1) for node in self.G.nodes()]
+        
+        # 可视化
+        plt.figure(figsize=(12, 10))
+        
+        # 选择布局算法
+        if layout == "spring":
+            pos = nx.spring_layout(self.G)
+        elif layout == "circular":
+            pos = nx.circular_layout(self.G)
+        elif layout == "random":
+            pos = nx.random_layout(self.G)
+        elif layout == "shell":
+            pos = nx.shell_layout(self.G)
+        elif layout == "spectral":
+            pos = nx.spectral_layout(self.G)
+        else:
+            pos = nx.spring_layout(self.G)
+        
+        # 绘制节点和边
+        nx.draw_networkx_edges(
+            self.G, pos, alpha=0.4, edge_color='gray'
+        )
+        
+        nx.draw_networkx_nodes(
+            self.G, pos, node_size=node_size, 
+            node_color=node_colors, cmap=cmap,
+            alpha=0.8
+        )
+        
+        # 绘制节点标签（仅对大型节点绘制）
+        if node_size > 100:
+            nx.draw_networkx_labels(self.G, pos, font_size=10)
+        
+        plt.title(title)
+        plt.axis('off')
+        plt.tight_layout()
+        plt.show()
+    
+    def get_subnetwork(self, nodes):
+        """
+        获取由指定节点组成的子网络
+        
+        参数:
+            nodes (list): 节点ID列表
+        
+        返回:
+            ComplexNetwork: 子网络对象
+        """
+        # 创建与原网络相同类型的子网络
+        subnetwork = ComplexNetwork(network_type=self.network_type)
+        
+        # 添加节点
+        subnetwork.add_nodes(nodes)
+        
+        # 添加边
+        for u, v in self.G.edges():
+            if u in nodes and v in nodes:
+                # 获取边的属性
+                edge_attr = self.G.get_edge_data(u, v)
+                subnetwork.add_edge(u, v, **edge_attr)
+        
+        return subnetwork
+
     @classmethod
     def load_network(cls, filename, network_type="undirected"):
         """从文件加载网络"""
@@ -302,15 +454,8 @@ class ComplexNetwork:
 # 示例使用
 if __name__ == "__main__":
     # 创建一个无向网络
-    network = ComplexNetwork()
+    network = ComplexNetwork.load_network('profiles/net.gml')
     
-    # 添加节点
-    network.add_nodes([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-    
-    # 添加边
-    edges = [(1, 2), (1, 3), (2, 3), (2, 4), (3, 5), (4, 5), (4, 6), 
-             (5, 7), (6, 7), (6, 8), (7, 9), (8, 9), (8, 10), (9, 10)]
-    network.add_edges(edges)
     
     # 显示网络基本信息
     print(f"节点数: {network.get_node_count()}")
@@ -320,8 +465,4 @@ if __name__ == "__main__":
     print(f"平均最短路径长度: {network.get_average_shortest_path_length():.4f}")
     print(f"直径: {network.get_diameter()}")
     
-    # 可视化网络
-    network.visualize(title="示例复杂网络")
-    
-    # 绘制度分布
-    network.plot_degree_distribution(title="示例网络度分布")    
+    network.visualize_communities()  
