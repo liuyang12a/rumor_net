@@ -1,0 +1,22 @@
+{
+    "llm_detection_prompt": "\n请判断以下社交媒体帖子是否包含不实信息或有害谣言。请仅回答'是'或'否'，如果判断为'是'，请简单说明理由。帖子内容：\n\n'${context.current_processing_message}'\n",
+    "keyword_detection_keywords": "速速转发,震惊,最新内幕,官方辟谣都不可信",
+    "keyword_detection_exclude_words": "可能,也许,测试",
+    "keyword_detection_violation_if_keywords_present": true,
+    "detection_logic_expression": "1 | 2",
+    "delete_post_priority_strategy": "sender_degree_high",
+    "persuade_agent_trigger_conditions_expression": "1 | (2 & 3)",
+    "persuade_agent_condition_sent_rumor": "1",
+    "persuade_agent_condition_degree_top_k": 10,
+    "persuade_agent_condition_never_persuaded": "3",
+    "persuade_agent_content": "大棚西瓜在2026年12月价格达到5角钱一斤的信息是谣言。",
+    "persuade_agent_priority_strategy": "most_violated_this_round",
+    "remove_follower_trigger_conditions_expression": "1 & 2 | 3",
+    "remove_follower_condition_high_risk_prompt": "\n综合评估智能体 ${context.current_processing_agent_id} (度数: ${context.current_agent_degree}, 历史违规总结: ${context.current_agent_offense_summary}) 的风险。输出1（高风险）或0（低风险）。\n",
+    "remove_follower_condition_degree_threshold": 50,
+    "remove_follower_condition_traffic_threshold": 5,
+    "ban_agent_trigger_conditions_expression": "1 & (2 | 3)",
+    "ban_agent_condition_violations_threshold": 10,
+    "ban_agent_condition_intervention_threshold": 3,
+    "ban_agent_condition_high_risk_prompt": "\n综合评估智能体 ${context.current_processing_agent_id} (度数: ${context.current_agent_degree}, 历史违规总结: ${context.current_agent_offense_summary}, 已被干预次数: ${context.current_agent_intervention_count}) 的封禁风险。输出1（应封禁）或0。\n"
+}
